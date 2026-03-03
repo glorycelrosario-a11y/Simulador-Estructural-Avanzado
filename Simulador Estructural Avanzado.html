@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratorio Estructural Pro | Entorno FEA Didáctico</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Iconos Lucide -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Three.js Importmap -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7', 900: '#0c4a6e' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #f8fafc;
+            color: #1e293b;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        #canvas-container { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100vw; height: 100vh; 
+            z-index: 0;
+            background: radial-gradient(circle at center, #ffffff 0%, #e2e8f0 100%);
+        }
+        
+        /* Clean Tech Glass Panel */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.1);
+        }
+
+        /* Controles deslizantes Premium */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 24px;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 999px;
+            transition: all 0.2s ease;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 3px solid #0ea5e9;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 2px 6px rgba(14, 165, 233, 0.4);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.1); }
+        input[type=range]:focus::-webkit-slider-runnable-track { background: #94a3b8; }
+
+        /* Botones de radio ocultos personalizados */
+        .btn-radio input:checked + div {
+            background-color: #0ea5e9;
+            color: white;
+            border-color: #0ea5e9;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25);
+        }
+
+        /* Scrollbar suave */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Animaciones */
+        .fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="selection:bg-brand-500 selection:text-white">
+
+    <!-- Contenedor WebGL -->
+    <div id="canvas-container"></div>
+
+    <!-- Panel Lateral Izquierdo: Controles -->
+    <div class="absolute top-6 left-6 w-80 glass-panel rounded-2xl p-6 flex flex-col gap-6 z-10 max-h-[calc(100vh-3rem)] overflow-y-auto fade-in">
+        
+        <!-- Cabecera -->
+        <div class="flex items-center gap-3 pb-4 border-b border-slate-200/60">
+            <div class="bg-brand-500 p-2 rounded-lg shadow-inner">
+                <i data-lucide="boxes" class="text-white w-5 h-5"></i>
+            </div>
+            <div class="flex-1">
+                <h1 class="text-base font-bold text-slate-800 tracking-tight">StructLab Pro</h1>
+                <p class="text-[11px] font-medium text-slate-500 uppercase tracking-widest">Motor FEA Didáctico</p>
+            </div>
+            <button onclick="app.toggleFullscreen()" class="text-slate-400 hover:text-brand-600 transition-colors p-1" title="Pantalla Completa">
+                <i data-lucide="maximize" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <!-- 1. Elemento Estructural -->
+        <div class="space-y-3">
+            <div class="flex items-center justify-between">
+                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i data-lucide="box-select" class="w-3.5 h-3.5"></i> Elemento
+                </label>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="btn-radio cursor-pointer group">
+                    <input type="radio" name="element" value="beam" checked onchange="app.setElement('beam')" class="sr-only">
+                    <div class="py-2.5 px-3 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold text-center transition-all group-hover:bg-slate-50">Viga</div>
+                </label>
+                <label class="btn-radio cursor-pointer group">
+                    <input type="radio" name="element" value="column" onchange="app.setElement('column')" class="sr-only">
+                    <div class="py-2.5 px-3 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold text-center transition-all group-hover:bg-slate-50">Columna</div>
+                </label>
+                <label class="btn-radio cursor-pointer group">
+                    <input type="radio" name="element" value="slab" onchange="app.setElement('slab')" class="sr-only">
+                    <div class="py-2.5 px-3 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold text-center transition-all group-hover:bg-slate-50">Losa</div>
+                </label>
+                <label class="btn-radio cursor-pointer group">
+                    <input type="radio" name="element" value="wall" onchange="app.setElement('wall')" class="sr-only">
+                    <div class="py-2.5 px-3 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold text-center transition-all group-hover:bg-slate-50">Muro</div>
+                </label>
+            </div>
+        </div>
+
+        <!-- 2. Configuración de Carga -->
+        <div class="space-y-3 pt-4 border-t border-slate-200/60">
+            <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <i data-lucide="arrow-down-to-line" class="w-3.5 h-3.5"></i> Patrón de Carga
+            </label>
+            <div class="flex gap-2 bg-slate-100/50 p-1 rounded-xl border border-slate-200/50">
+                <label class="btn-radio cursor-pointer flex-1">
+                    <input type="radio" name="loadType" value="point" checked onchange="app.setLoadType('point')" class="sr-only">
+                    <div class="py-1.5 px-2 rounded-lg text-slate-500 text-[11px] font-medium text-center transition-all">Puntual</div>
+                </label>
+                <label class="btn-radio cursor-pointer flex-1">
+                    <input type="radio" name="loadType" value="distributed" onchange="app.setLoadType('distributed')" class="sr-only">
+                    <div class="py-1.5 px-2 rounded-lg text-slate-500 text-[11px] font-medium text-center transition-all">Distribuida</div>
+                </label>
+            </div>
+        </div>
+
+        <!-- 3. Magnitud de Fuerza -->
+        <div class="space-y-3 pt-4 border-t border-slate-200/60">
+            <div class="flex justify-between items-end">
+                <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i data-lucide="activity" class="w-3.5 h-3.5"></i> Magnitud
+                </label>
+                <div class="bg-brand-50 px-2 py-0.5 rounded text-brand-700 font-mono text-xs font-bold shadow-sm" id="mag-display">0 kN</div>
+            </div>
+            <div class="pt-2">
+                <input type="range" min="0" max="100" value="0" id="magnitude-slider" oninput="app.updateMagnitude(this.value)">
+                <div class="flex justify-between mt-1 text-[9px] text-slate-400 font-medium">
+                    <span>Reposo</span>
+                    <span>Fluencia Máx</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Acciones -->
+        <div class="pt-2">
+            <button onclick="app.reset()" class="w-full flex items-center justify-center gap-2 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-slate-900/10">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                Restablecer Sistema
+            </button>
+        </div>
+    </div>
+
+    <!-- Panel Derecho: Telemetría y Calorimetría -->
+    <div class="absolute top-6 right-6 w-72 glass-panel rounded-2xl p-5 z-10 hidden md:flex flex-col gap-4 fade-in">
+        
+        <div class="flex items-center gap-2 mb-1">
+            <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+            <h2 class="text-xs font-bold text-slate-700 uppercase tracking-widest">Telemetría FEA</h2>
+        </div>
+
+        <!-- Leyenda Calorimetría -->
+        <div class="space-y-2">
+            <p class="text-[10px] font-bold text-slate-500 uppercase">Mapa de Esfuerzos Principales</p>
+            <div class="h-3 w-full rounded-full bg-gradient-to-r from-blue-600 via-emerald-400 to-red-600 shadow-inner border border-black/5"></div>
+            <div class="flex justify-between text-[9px] font-bold text-slate-500">
+                <span class="text-blue-600">Compresión (-)</span>
+                <span class="text-emerald-600">Neutro (0)</span>
+                <span class="text-red-600">Tensión (+)</span>
+            </div>
+        </div>
+
+        <!-- Datos Simulados -->
+        <div class="grid grid-cols-2 gap-3 mt-2">
+            <div class="bg-white/60 p-3 rounded-xl border border-white/80 shadow-sm">
+                <p class="text-[9px] text-slate-400 uppercase font-bold mb-1">Deflexión Máx</p>
+                <p class="text-lg font-mono font-bold text-slate-800" id="data-deflection">0.0<span class="text-xs text-slate-500 ml-0.5">mm</span></p>
+            </div>
+            <div class="bg-white/60 p-3 rounded-xl border border-white/80 shadow-sm">
+                <p class="text-[9px] text-slate-400 uppercase font-bold mb-1">Esfuerzo Máx</p>
+                <p class="text-lg font-mono font-bold text-slate-800" id="data-stress">0.0<span class="text-xs text-slate-500 ml-0.5">MPa</span></p>
+            </div>
+        </div>
+
+        <!-- Contexto Didáctico -->
+        <div class="mt-2 p-3 bg-brand-50/50 rounded-xl border border-brand-100">
+            <p id="info-title" class="text-xs font-bold text-brand-900 mb-1 flex items-center gap-1">
+                <i data-lucide="info" class="w-3.5 h-3.5"></i> Comportamiento
+            </p>
+            <p id="info-desc" class="text-[11px] text-brand-700 leading-relaxed">
+                Seleccione un elemento para visualizar su análisis.
+            </p>
+        </div>
+    </div>
+
+    <!-- Inicialización de Iconos -->
+    <script>lucide.createIcons();</script>
+
+    <!-- Script Principal Motor FEA Visual -->
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Arquitectura del Sistema ---
+        const sys = {
+            state: {
+                element: 'beam',     // beam, column, slab, wall
+                loadType: 'point',   // point, distributed
+                magnitudeRaw: 0,     // 0 a 1
+                isDeformed: false
+            },
+            physics: {
+                maxForceKN: 500,     // Fuerza referencial para UI
+                exaggeration: 0.8,   // Multiplicador visual de deformación
+                youngModulus: 30000, // Concreto simulado (MPa)
+                meshResolution: 64   // Subdivisión para curvas suaves
+            },
+            colors: {
+                compression: new THREE.Color(0x2563eb), // Blue 600
+                neutral: new THREE.Color(0x34d399),     // Emerald 400
+                tension: new THREE.Color(0xdc2626)      // Red 600
+            },
+            data: {
+                beam: { 
+                    dim: [8, 0.4, 0.6], pos: [0, 3, 0], // L, W, H
+                    desc: "La viga trabaja a flexión. Las fibras superiores se comprimen (Azul) y las inferiores se traccionan (Rojo). El centro geométrico (Verde) es el eje neutro donde el esfuerzo es cero." 
+                },
+                column: { 
+                    dim: [0.5, 5, 0.5], pos: [0, 2.5, 0], 
+                    desc: "La columna resiste compresión axial (Azul uniforme). Al superar la carga crítica, sufre pandeo de Euler, flexionándose lateralmente y generando tensión en una cara." 
+                },
+                slab: { 
+                    dim: [6, 0.15, 6], pos: [0, 3, 0], 
+                    desc: "La losa actúa como una placa bidireccional. La deflexión máxima ocurre en el centro, distribuyendo los esfuerzos de tensión en la cara inferior en forma de malla y compresión en la superior." 
+                },
+                wall: { 
+                    dim: [5, 4, 0.25], pos: [0, 2, 0], 
+                    desc: "El muro distribuye cargas verticales uniformemente. Es extremadamente rígido en su plano (compresión pura), pero vulnerable a flexión fuera de su plano." 
+                }
+            }
+        };
+
+        // --- Configuración WebGL ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(8, 6, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 4;
+        controls.maxDistance = 20;
+        controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+        // --- Iluminación Clean Tech ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe2e8f0, 0.4);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 15, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 30;
+        dirLight.shadow.camera.left = -8;
+        dirLight.shadow.camera.right = 8;
+        dirLight.shadow.camera.top = 8;
+        dirLight.shadow.camera.bottom = -8;
+        dirLight.shadow.bias = -0.0001;
+        scene.add(dirLight);
+
+        // --- Entorno Físico ---
+        const grid = new THREE.GridHelper(20, 20, 0x94a3b8, 0xe2e8f0);
+        grid.position.y = -0.01;
+        scene.add(grid);
+
+        const floorGeo = new THREE.PlaneGeometry(20, 20);
+        const floorMat = new THREE.MeshStandardMaterial({ 
+            color: 0xf8fafc, 
+            roughness: 0.8,
+            metalness: 0.1,
+            depthWrite: false
+        });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const supports = new THREE.Group();
+        scene.add(supports);
+
+        // --- Elementos Estructurales ---
+        let currentMesh = null;
+        let wireframeMesh = null;
+        const arrowsGroup = new THREE.Group();
+        scene.add(arrowsGroup);
+
+        const elementMaterial = new THREE.MeshStandardMaterial({
+            vertexColors: true,
+            roughness: 0.4,
+            metalness: 0.1,
+            polygonOffset: true,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits: 1
+        });
+
+        const wireMaterial = new THREE.MeshBasicMaterial({
+            color: 0x0f172a,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.05
+        });
+
+        // --- Funciones Principales ---
+        function buildElement(type) {
+            if (currentMesh) {
+                scene.remove(currentMesh);
+                scene.remove(wireframeMesh);
+                currentMesh.geometry.dispose();
+                wireframeMesh.geometry.dispose();
+            }
+            supports.clear();
+
+            const d = sys.data[type];
+            let geo;
+            const res = sys.physics.meshResolution;
+
+            switch(type) {
+                case 'beam':
+                    geo = new THREE.BoxGeometry(d.dim[0], d.dim[1], d.dim[2], res, 10, 4);
+                    addSupport(-d.dim[0]/2, 3 - d.dim[1]/2);
+                    addSupport(d.dim[0]/2, 3 - d.dim[1]/2);
+                    break;
+                case 'column':
+                    geo = new THREE.BoxGeometry(d.dim[0], d.dim[1], d.dim[2], 8, res, 8);
+                    addSupport(0, 0, d.dim[0]*2, 0.2, d.dim[2]*2);
+                    break;
+                case 'slab':
+                    geo = new THREE.BoxGeometry(d.dim[0], d.dim[1], d.dim[2], res/2, 4, res/2);
+                    const offset = d.dim[0]/2 - 0.2;
+                    addSupport(-offset, 1.5, 0.3, 3, 0.3);
+                    addSupport(offset, 1.5, 0.3, 3, 0.3);
+                    addSupport(-offset, 1.5, 0.3, 3, 0.3, offset);
+                    addSupport(offset, 1.5, 0.3, 3, 0.3, offset);
+                    addSupport(-offset, 1.5, 0.3, 3, 0.3, -offset);
+                    addSupport(offset, 1.5, 0.3, 3, 0.3, -offset);
+                    break;
+                case 'wall':
+                    geo = new THREE.BoxGeometry(d.dim[0], d.dim[1], d.dim[2], res, res, 4);
+                    addSupport(0, 0, d.dim[0], 0.2, d.dim[2]*3);
+                    break;
+            }
+
+            geo.translate(d.pos[0], d.pos[1], d.pos[2]);
+
+            const count = geo.attributes.position.count;
+            const colors = new Float32Array(count * 3);
+            for(let i=0; i<count; i++) {
+                colors[i*3] = sys.colors.neutral.r;
+                colors[i*3+1] = sys.colors.neutral.g;
+                colors[i*3+2] = sys.colors.neutral.b;
+            }
+            geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            currentMesh = new THREE.Mesh(geo, elementMaterial);
+            currentMesh.castShadow = true;
+            currentMesh.receiveShadow = true;
+            currentMesh.userData.originalPos = geo.attributes.position.array.slice();
+            currentMesh.userData.type = type;
+
+            wireframeMesh = new THREE.Mesh(geo, wireMaterial);
+
+            scene.add(currentMesh);
+            scene.add(wireframeMesh);
+
+            document.getElementById('info-desc').innerText = d.desc;
+            updateCameraFocus(type);
+            drawArrows();
+            
+            if (sys.state.magnitudeRaw > 0) processDeformation();
+            else resetTelemetry();
+        }
+
+        function addSupport(x, y, sx=0.4, sy=0.4, sz=0.4, z=0) {
+            const mat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.6 });
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat);
+            mesh.position.set(x, y - sy/2, z);
+            mesh.castShadow = true;
+            supports.add(mesh);
+        }
+
+        function updateCameraFocus(type) {
+            const targets = {
+                beam: new THREE.Vector3(0, 3, 0),
+                column: new THREE.Vector3(0, 2.5, 0),
+                slab: new THREE.Vector3(0, 3, 0),
+                wall: new THREE.Vector3(0, 2, 0)
+            };
+            const t = targets[type];
+            controls.target.set(t.x, t.y, t.z);
+        }
+
+        function getStressColor(stressValue) {
+            const clamp = Math.max(-1, Math.min(1, stressValue));
+            const color = new THREE.Color();
+            
+            if (clamp < 0) {
+                color.lerpColors(sys.colors.compression, sys.colors.neutral, 1 + clamp);
+            } else {
+                color.lerpColors(sys.colors.neutral, sys.colors.tension, clamp);
+            }
+            if (Math.abs(clamp) > 0.8) {
+                color.multiplyScalar(1.2); 
+            }
+            return color;
+        }
+
+        function processDeformation() {
+            if (!currentMesh) return;
+
+            const mag = sys.state.magnitudeRaw;
+            const geo = currentMesh.geometry;
+            const pos = geo.attributes.position;
+            const col = geo.attributes.color;
+            const orig = currentMesh.userData.originalPos;
+            const type = sys.state.element;
+            const dim = sys.data[type].dim;
+            const offset = sys.data[type].pos;
+
+            let maxDeflection = 0;
+            let maxStressVisual = 0;
+
+            for (let i = 0; i < pos.count; i++) {
+                const ox = orig[i*3]; 
+                const oy = orig[i*3+1]; 
+                const oz = orig[i*3+2];
+                
+                let dx = 0, dy = 0, dz = 0;
+                let stress = 0;
+
+                if (type === 'beam') {
+                    const L = dim[0];
+                    const H = dim[1];
+                    const xNorm = ox / (L/2);
+                    const yRel = oy - offset[1]; 
+                    
+                    if (sys.state.loadType === 'point') {
+                        const curve = 1 - Math.abs(xNorm);
+                        const defl = mag * sys.physics.exaggeration * Math.pow(curve, 1.5) * 1.5;
+                        dy = -defl;
+                        
+                        // CORRECCIÓN FÍSICA: Las fibras superiores (yRel > 0) están bajo compresión (Esfuerzo Negativo)
+                        const moment = curve;
+                        stress = -(yRel / (H/2)) * moment * mag * 2; 
+
+                    } else {
+                        const curve = 1 - Math.pow(xNorm, 2);
+                        const defl = mag * sys.physics.exaggeration * Math.pow(curve, 2) * 1.2;
+                        dy = -defl;
+                        
+                        // CORRECCIÓN FÍSICA: Signo negativo para respetar la teoría de vigas
+                        const moment = curve;
+                        stress = -(yRel / (H/2)) * moment * mag * 2;
+                    }
+                    dx = stress * 0.1 * Math.sign(ox);
+
+                } 
+                else if (type === 'column') {
+                    const L = dim[1];
+                    const W = dim[0];
+                    const yNorm = (oy - offset[1]) / (L/2);
+                    
+                    dy = -mag * sys.physics.exaggeration * 0.3 * (yNorm + 1)/2;
+                    stress = -mag * 0.5;
+
+                    const bucklingThreshold = 0.4;
+                    if (mag > bucklingThreshold && sys.state.loadType === 'point') {
+                        const normalizedYForSine = (oy - (offset[1] - L/2)) / L;
+                        const pandeoCurve = Math.sin(normalizedYForSine * Math.PI);
+                        const pandeoMag = Math.pow((mag - bucklingThreshold)/0.6, 2) * sys.physics.exaggeration;
+                        dx = pandeoMag * pandeoCurve;
+                        
+                        const xRel = ox - offset[0]; 
+                        const bendingStress = (xRel / (W/2)) * pandeoCurve * pandeoMag * 1.5;
+                        stress += bendingStress;
+                    }
+                    if (Math.abs(stress) > 0) {
+                        dx += -stress * 0.1 * Math.sign(ox - offset[0]);
+                        dz += -stress * 0.1 * Math.sign(oz - offset[2]);
+                    }
+                }
+                else if (type === 'slab') {
+                    const L = dim[0];
+                    const H = dim[1];
+                    const xNorm = ox / (L/2);
+                    const zNorm = oz / (dim[2]/2);
+                    const yRel = oy - offset[1];
+                    
+                    let curve = 0;
+                    if (sys.state.loadType === 'point') {
+                        const r = Math.sqrt(xNorm*xNorm + zNorm*zNorm);
+                        curve = r < 1.4 ? Math.pow(Math.cos(r * Math.PI/2.8), 2) : 0;
+                    } else {
+                        curve = Math.cos(xNorm * Math.PI/2) * Math.cos(zNorm * Math.PI/2);
+                    }
+                    
+                    dy = -mag * sys.physics.exaggeration * curve * 0.8;
+                    // CORRECCIÓN FÍSICA: Signo negativo añadido
+                    stress = -(yRel / (H/2)) * curve * mag * 2.5;
+                }
+                else if (type === 'wall') {
+                    const H = dim[1];
+                    const yNorm = (oy - offset[1]) / (H/2);
+                    
+                    dy = -mag * sys.physics.exaggeration * 0.1 * (yNorm + 1)/2;
+                    stress = -mag * 0.6;
+                    
+                    const zRel = oz - offset[2];
+                    dz = -stress * 0.05 * Math.sign(zRel);
+                }
+
+                pos.setXYZ(i, ox + dx, oy + dy, oz + dz);
+
+                const finalColor = getStressColor(stress);
+                col.setXYZ(i, finalColor.r, finalColor.g, finalColor.b);
+
+                maxDeflection = Math.max(maxDeflection, Math.abs(dy));
+                maxStressVisual = Math.max(maxStressVisual, Math.abs(stress));
+            }
+
+            pos.needsUpdate = true;
+            col.needsUpdate = true;
+            geo.computeVertexNormals();
+            
+            updateTelemetry(maxDeflection, maxStressVisual);
+            drawArrows();
+        }
+
+        function drawArrows() {
+            arrowsGroup.clear();
+            const mag = sys.state.magnitudeRaw;
+            if (mag < 0.05) return;
+
+            const type = sys.state.element;
+            const dim = sys.data[type].dim;
+            const pos = sys.data[type].pos;
+            const arrowColor = 0x0ea5e9; 
+            const scale = 0.5 + mag;
+            const topY = pos[1] + dim[1]/2;
+
+            let centerDeflection = 0;
+            if(type === 'beam') centerDeflection = mag * sys.physics.exaggeration * 1.5;
+            if(type === 'slab') centerDeflection = mag * sys.physics.exaggeration * 0.8;
+
+            if (sys.state.loadType === 'point') {
+                const origin = new THREE.Vector3(pos[0], topY + scale * 1.5 - centerDeflection, pos[2]);
+                const arrow = new THREE.ArrowHelper(new THREE.Vector3(0,-1,0), origin, scale * 1.5, arrowColor, 0.4, 0.3);
+                arrowsGroup.add(arrow);
+            } else {
+                const stepsX = type === 'beam' || type === 'slab' || type === 'wall' ? 5 : 1;
+                const stepsZ = type === 'slab' ? 5 : 1;
+                
+                const stepLenX = dim[0] * 0.8; 
+                const stepLenZ = dim[2] * 0.8;
+
+                for(let i=0; i<stepsX; i++) {
+                    for(let j=0; j<stepsZ; j++) {
+                        const px = stepsX > 1 ? pos[0] - stepLenX/2 + (i/(stepsX-1)) * stepLenX : pos[0];
+                        const pz = stepsZ > 1 ? pos[2] - stepLenZ/2 + (j/(stepsZ-1)) * stepLenZ : pos[2];
+                        
+                        let localDefl = 0;
+                        if(type==='beam') localDefl = mag * sys.physics.exaggeration * 1.2 * (1 - Math.pow(px/(dim[0]/2), 2));
+                        
+                        const origin = new THREE.Vector3(px, topY + scale - localDefl, pz);
+                        const arrow = new THREE.ArrowHelper(new THREE.Vector3(0,-1,0), origin, scale, arrowColor, 0.2, 0.2);
+                        arrowsGroup.add(arrow);
+                    }
+                }
+            }
+        }
+
+        function updateTelemetry(defl, stress) {
+            const realDefl_mm = (defl * 25).toFixed(1); 
+            const realStress_MPa = (stress * 15).toFixed(1); 
+            
+            document.getElementById('data-deflection').innerHTML = `${realDefl_mm}<span class="text-xs text-slate-500 ml-0.5">mm</span>`;
+            document.getElementById('data-stress').innerHTML = `${realStress_MPa}<span class="text-xs text-slate-500 ml-0.5">MPa</span>`;
+        }
+
+        function resetTelemetry() {
+            document.getElementById('data-deflection').innerHTML = `0.0<span class="text-xs text-slate-500 ml-0.5">mm</span>`;
+            document.getElementById('data-stress').innerHTML = `0.0<span class="text-xs text-slate-500 ml-0.5">MPa</span>`;
+        }
+
+        window.app = {
+            setElement: (type) => {
+                sys.state.element = type;
+                buildElement(type);
+            },
+            setLoadType: (type) => {
+                sys.state.loadType = type;
+                processDeformation();
+            },
+            updateMagnitude: (val) => {
+                const magRaw = val / 100;
+                sys.state.magnitudeRaw = magRaw;
+                
+                const kN = Math.round(magRaw * sys.physics.maxForceKN);
+                document.getElementById('mag-display').innerText = `${kN} kN`;
+                
+                if(magRaw === 0) {
+                    const geo = currentMesh.geometry;
+                    geo.attributes.position.array.set(currentMesh.userData.originalPos);
+                    const col = geo.attributes.color;
+                    for(let i=0; i<col.count; i++) {
+                        col.setXYZ(i, sys.colors.neutral.r, sys.colors.neutral.g, sys.colors.neutral.b);
+                    }
+                    geo.attributes.position.needsUpdate = true;
+                    geo.attributes.color.needsUpdate = true;
+                    geo.computeVertexNormals();
+                    arrowsGroup.clear();
+                    resetTelemetry();
+                } else {
+                    processDeformation();
+                }
+            },
+            reset: () => {
+                document.getElementById('magnitude-slider').value = 0;
+                app.updateMagnitude(0);
+                controls.reset();
+            },
+            toggleFullscreen: () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        console.log(`Error: ${err.message}`);
+                    });
+                } else {
+                    document.exitFullscreen();
+                }
+            }
+        };
+
+        buildElement('beam');
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); 
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>
